@@ -25,12 +25,10 @@
   <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
 
   <script>
-    // --- Custom CRS: center (0,0), bounds -1,-1 to +1,+1 ---
     const MyCRS = L.extend({}, L.CRS.Simple, {
       transformation: new L.Transformation(1, 1, -1, 1)
     });
 
-    // Initialize map
     const map = L.map('map', {
       crs: MyCRS,
       center: [0, 0],
@@ -39,72 +37,79 @@
       maxZoom: 13
     });
 
-    // Define bounds: top-left (-1,-1) to bottom-right (1,1)
     const bounds = [[-1, -1], [1, 1]];
 
-    // --- Fetch overlays from Google Sheet ---
+    // --- Overlays ---
     const overlaySheetURL = "https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/Map_Overlays";
-
     fetch(overlaySheetURL)
       .then(res => res.json())
       .then(data => {
         data.forEach(row => {
           if (row.image_url) {
-            // Each row should have at least: image_url
             L.imageOverlay(row.image_url, bounds).addTo(map);
           }
         });
-
-        // Fit to bounds after overlays load
         map.fitBounds(bounds);
-      })
-      .catch(err => console.error("Error loading overlays:", err));
+      });
 
-    // --- Fetch markers from Google Sheet (Map tab) ---
-    const markerSheetURL = "https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/HomeWorldMap";
+    // --- LayerGroups ---
+    const homeLayer = L.layerGroup();
+    const deploymentLayer = L.layerGroup();
 
-    fetch(markerSheetURL)
-      .then(res => res.json())
-      .then(data => {
-        const coordMap = {}; // group markers by exact coordinates
+    function loadMarkers(sheetURL, layer) {
+      fetch(sheetURL)
+        .then(res => res.json())
+        .then(data => {
+          const coordMap = {};
+          data.forEach(row => {
+            const x = parseFloat(row.x);
+            const y = parseFloat(row.y);
+            if (isNaN(x) || isNaN(y)) return;
 
-        data.forEach(row => {
-          const x = parseFloat(row.x);
-          const y = parseFloat(row.y);
-          if (isNaN(x) || isNaN(y)) return;
+            const key = `${x},${y}`;
+            const marker = L.marker([y, x], {
+              icon: L.icon({
+                iconUrl: row.icon_url || "https://unpkg.com/leaflet/dist/images/marker-icon.png",
+                iconSize: [42, 42],
+                iconAnchor: [16, 32],
+                popupAnchor: [0, -28]
+              })
+            }).bindPopup(`<b>${row.name || "Unnamed"}</b><br>${row.description || ""}`);
 
-          const key = `${x},${y}`;
-          const marker = L.marker([y, x], {
-            icon: L.icon({
-              iconUrl: row.icon_url || "https://unpkg.com/leaflet/dist/images/marker-icon.png",
-              iconSize: [42, 42],
-              iconAnchor: [16, 32],
-              popupAnchor: [0, -28]
-            })
-          }).bindPopup(`<b>${row.name || "Unnamed"}</b><br>${row.description || ""}`);
+            if (!coordMap[key]) coordMap[key] = [];
+            coordMap[key].push(marker);
+          });
 
-          if (!coordMap[key]) coordMap[key] = [];
-          coordMap[key].push(marker);
+          Object.values(coordMap).forEach(markersArray => {
+            if (markersArray.length === 1) {
+              markersArray[0].addTo(layer);
+            } else {
+              markersArray[0].addTo(layer);
+              markersArray[0].on('click', function() {
+                const tempCluster = L.markerClusterGroup({ spiderfyOnMaxZoom: true });
+                markersArray.forEach(m => tempCluster.addLayer(m));
+                map.addLayer(tempCluster);
+                tempCluster.spiderfy();
+                map.once('click', () => map.removeLayer(tempCluster));
+              });
+            }
+          });
         });
+    }
 
-        // Add markers to map
-        Object.values(coordMap).forEach(markersArray => {
-          if (markersArray.length === 1) {
-            markersArray[0].addTo(map);
-          } else {
-            markersArray[0].addTo(map);
-            markersArray[0].on('click', function() {
-              const tempCluster = L.markerClusterGroup({ spiderfyOnMaxZoom: true });
-              markersArray.forEach(m => tempCluster.addLayer(m));
-              map.addLayer(tempCluster);
-              tempCluster.spiderfy();
-              map.once('click', () => map.removeLayer(tempCluster));
-            });
-          }
-        });
-      })
-      .catch(err => console.error("Error loading markers:", err));
+    // Load HomeWorld markers (ON by default)
+    loadMarkers("https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/HomeWorldMap", homeLayer);
+    homeLayer.addTo(map);
+
+    // Load Deployment markers (OFF by default)
+    loadMarkers("https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/DeploymentMap", deploymentLayer);
+    // notice: NOT added to map here!
+
+    // Add layer control
+    L.control.layers(null, {
+      "Home Planets": homeLayer,
+      "Deployment Planets": deploymentLayer
+    }).addTo(map);
   </script>
 </body>
 </html>
-
