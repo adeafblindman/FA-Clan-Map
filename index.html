@@ -42,17 +42,28 @@
     // Define bounds: top-left (-1,-1) to bottom-right (1,1)
     const bounds = [[-1, -1], [1, 1]];
 
- // --- Use your custom map image ---
-    L.imageOverlay('Media/Blue_Backer.webp', bounds).addTo(map);
-    L.imageOverlay('https://cdn.discordapp.com/attachments/1242843098363596883/1410263848388264096/en.webp?ex=68b0620e&is=68af108e&hm=56d9075432ea9b7e5cbdadf086ad5dc4ef10ca071b577f8bb29f79d43b39cc7b', bounds).addTo(map);
-    map.fitBounds(bounds);
+    // --- Fetch overlays from Google Sheet ---
+    const overlaySheetURL = "https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/Map_Overlays";
 
-    map.fitBounds(bounds);
+    fetch(overlaySheetURL)
+      .then(res => res.json())
+      .then(data => {
+        data.forEach(row => {
+          if (row.image_url) {
+            // Each row should have at least: image_url
+            L.imageOverlay(row.image_url, bounds).addTo(map);
+          }
+        });
 
-    // --- Fetch data from Google Sheet (Planet_Lookup tab) ---
-    const sheetURL = "https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/Map";
+        // Fit to bounds after overlays load
+        map.fitBounds(bounds);
+      })
+      .catch(err => console.error("Error loading overlays:", err));
 
-    fetch(sheetURL)
+    // --- Fetch markers from Google Sheet (Map tab) ---
+    const markerSheetURL = "https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/Map";
+
+    fetch(markerSheetURL)
       .then(res => res.json())
       .then(data => {
         const coordMap = {}; // group markers by exact coordinates
@@ -79,38 +90,20 @@
         // Add markers to map
         Object.values(coordMap).forEach(markersArray => {
           if (markersArray.length === 1) {
-            // Single marker, just add normally
             markersArray[0].addTo(map);
           } else {
-            // Multiple markers at same coord
-            // Add first marker visible
             markersArray[0].addTo(map);
-
-            // On click, create a temporary cluster and spiderfy
             markersArray[0].on('click', function() {
               const tempCluster = L.markerClusterGroup({ spiderfyOnMaxZoom: true });
               markersArray.forEach(m => tempCluster.addLayer(m));
               map.addLayer(tempCluster);
               tempCluster.spiderfy();
-
-              // Remove the temp cluster after user closes popup or clicks elsewhere
               map.once('click', () => map.removeLayer(tempCluster));
             });
           }
         });
       })
-      .catch(err => console.error("Error loading sheet:", err));
+      .catch(err => console.error("Error loading markers:", err));
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
