@@ -74,7 +74,7 @@
                 iconAnchor: [16, 32],
                 popupAnchor: [0, -28]
               })
-            }).bindPopup(`<b>${row.Clans Clan Name || "Unnamed"}</b><br>${row.description || ""}`);
+            }).bindPopup(`<b>${row.name || "Unnamed"}</b><br>${row.description || ""}`);
 
             if (!coordMap[key]) coordMap[key] = [];
             coordMap[key].push(marker);
@@ -113,5 +113,6 @@
   </script>
 </body>
 </html>
+
 
 
