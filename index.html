@@ -104,6 +104,19 @@
     // Load Deployment markers (OFF by default)
     loadMarkers("https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/DeploymentMap", deploymentLayer);
 
+
+//Coordinate Finder
+    var marker = L.marker([1, 1], {
+      draggable: true,
+    }).addTo(map);
+    marker.bindPopup('LatLng Marker').openPopup();
+    marker.on('dragend', function(e) {
+      marker.getPopup().setContent(marker.getLatLng().toString()).openOn(map);
+    });
+
+
+
+    
     // --- GeoJSON Sectors ---
     const sectorLayer = L.layerGroup();
     fetch('sectors.geojson')
@@ -149,4 +162,5 @@
   </script>
 </body>
 </html>
+
 
