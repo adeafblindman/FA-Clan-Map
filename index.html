@@ -39,7 +39,7 @@
 
     const bounds = [[-1, -1], [1, 1]];
 
-    // --- Overlays ---
+    // --- Background Overlays ---
     const overlaySheetURL = "https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/Map_Overlays";
     fetch(overlaySheetURL)
       .then(res => res.json())
@@ -52,7 +52,7 @@
         map.fitBounds(bounds);
       });
 
-    // --- LayerGroups ---
+    // --- Layers ---
     const homeLayer = L.layerGroup();
     const deploymentLayer = L.layerGroup();
 
@@ -103,16 +103,49 @@
 
     // Load Deployment markers (OFF by default)
     loadMarkers("https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/DeploymentMap", deploymentLayer);
-    // notice: NOT added to map here!
+
+    // --- GeoJSON Sectors ---
+    const sectorLayer = L.layerGroup();
+    fetch('sectors.geojson')
+      .then(res => res.json())
+      .then(data => {
+        const geoLayer = L.geoJSON(data, {
+          style: feature => ({
+            fillColor: feature.properties.color || '#888888',
+            color: '#000',
+            weight: 1,
+            fillOpacity: 0.5
+          }),
+          onEachFeature: (feature, layer) => {
+            layer.bindPopup(`Sector ID: ${feature.properties.id}`);
+          }
+        }).addTo(sectorLayer);
+      });
+
+    sectorLayer.addTo(map);
 
     // Add layer control
     L.control.layers(null, {
+      "Sectors": sectorLayer,
       "Home Planets": homeLayer,
       "Deployment Planets": deploymentLayer
     }).addTo(map);
+
+    // 🔄 Optional: Update sector colors dynamically
+    async function updateSectorColors() {
+      // Example Google Sheet data: [{id: "3", color: "#ff0000"}, ...]
+      const sheetData = await fetch('YOUR_GOOGLESHEET_JSON_URL').then(r => r.json());
+      sectorLayer.eachLayer(layer => {
+        if (layer.feature) {
+          const match = sheetData.find(r => r.id == layer.feature.properties.id);
+          if (match) {
+            layer.setStyle({ fillColor: match.color });
+          }
+        }
+      });
+    }
+    // Refresh colors every 60 seconds
+    setInterval(updateSectorColors, 60000);
   </script>
 </body>
 </html>
-
-
-
