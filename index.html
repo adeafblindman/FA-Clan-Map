@@ -147,7 +147,7 @@ async function updateSectorColors() {
     if (match && match.color) {
       layer.setStyle({ fillColor: match.color });
       layer.bindPopup(
-        `<b>Sector ${id}</b><br>${match["SECTOR NAME"] || ""}<br>${match.color}`
+        `<b>Sector ${id}</b><br>${match["SECTOR NAME"] || ""}`
       );
     }
   });
@@ -176,4 +176,5 @@ fetch('sectors.geojson')
   </script>
 </body>
 </html>
+
 
