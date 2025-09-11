@@ -1,8 +1,8 @@
 {
-  "type": "Feature",
-  "properties": {
-    "id": 16,
-     "color": "#888888"
+      "type": "Feature",
+      "properties": {
+        "id": 16,
+        "color": "#888888"
   },
   "geometry": {
     "type": "Polygon",
