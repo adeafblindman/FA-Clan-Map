@@ -11,15 +11,13 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
 
   <style>
-    #map { width: 100%; height: 100vh; }
-    #controls { position: absolute; top: 8px; left: 8px; z-index: 1000; }
-    button { padding:6px 10px; margin-right:6px; }
+    #map {
+      width: 100%;
+      height: 100vh;
+    }
   </style>
 </head>
 <body>
-  <div id="controls">
-    <button id="download-geojson">Download Sectors GeoJSON</button>
-  </div>
   <div id="map"></div>
 
   <!-- Leaflet JS -->
@@ -27,291 +25,94 @@
   <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
 
   <script>
-  // ----------------------------
-  // Map init (same as your setup)
-  // ----------------------------
-  const MyCRS = L.extend({}, L.CRS.Simple, {
-    transformation: new L.Transformation(1, 1, -1, 1)
-  });
-
-  const map = L.map('map', {
-    crs: MyCRS,
-    center: [0, 0],
-    zoom: 9,
-    minZoom: 8.5,
-    maxZoom: 13
-  });
-
-  const bounds = [[-1, -1], [1, 1]];
-
-  // Background overlays (unchanged)
-  const overlaySheetURL = "https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/Map_Overlays";
-  fetch(overlaySheetURL)
-    .then(res => res.json())
-    .then(data => {
-      data.forEach(row => {
-        if (row.image_url) L.imageOverlay(row.image_url, bounds).addTo(map);
-      });
-      map.fitBounds(bounds);
-    }).catch(()=>{ map.fitBounds(bounds); });
-
-  // Marker layers (unchanged)
-  const homeLayer = L.layerGroup();
-  const deploymentLayer = L.layerGroup();
-
-  function loadMarkers(sheetURL, layer) {
-    fetch(sheetURL)
-      .then(res => res.json())
-      .then(data => {
-        const coordMap = {};
-        data.forEach(row => {
-          const x = parseFloat(row.x);
-          const y = parseFloat(row.y);
-          if (isNaN(x) || isNaN(y)) return;
-          const key = `${x},${y}`;
-          const marker = L.marker([y, x], {
-            icon: L.icon({
-              iconUrl: row.icon_url || "https://unpkg.com/leaflet/dist/images/marker-icon.png",
-              iconSize: [42, 42],
-              iconAnchor: [16, 32],
-              popupAnchor: [0, -28]
-            })
-          }).bindPopup(`<b>${row.name || "Unnamed"}</b><br>${row.description || ""}`);
-          if (!coordMap[key]) coordMap[key] = [];
-          coordMap[key].push(marker);
-        });
-
-        Object.values(coordMap).forEach(markersArray => {
-          if (markersArray.length === 1) {
-            markersArray[0].addTo(layer);
-          } else {
-            markersArray[0].addTo(layer);
-            markersArray[0].on('click', function() {
-              const tempCluster = L.markerClusterGroup({ spiderfyOnMaxZoom: true });
-              markersArray.forEach(m => tempCluster.addLayer(m));
-              map.addLayer(tempCluster);
-              tempCluster.spiderfy();
-              map.once('click', () => map.removeLayer(tempCluster));
-            });
-          }
-        });
-      }).catch(err => console.warn('Marker sheet load failed', err));
-  }
-
-  loadMarkers("https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/HomeWorldMap", homeLayer);
-  homeLayer.addTo(map);
-  loadMarkers("https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/DeploymentMap", deploymentLayer);
-
-  // ----------------------------
-  // Sector layer & data holder
-  // ----------------------------
-  const sectorLayer = L.layerGroup().addTo(map);
-  let generatedGeoJSON = { type: "FeatureCollection", features: [] }; // will be filled
-
-  // Try to load pre-made GeoJSON; if not present, fallback to extracting from SVG
-  async function loadSectors() {
-    try {
-      const res = await fetch('sectors.geojson');
-      if (res.ok) {
-        const data = await res.json();
-        L.geoJSON(data, {
-          style: f => ({
-            fillColor: f.properties.color || '#888888',
-            color: '#000',
-            weight: 1,
-            fillOpacity: 0.5
-          }),
-          onEachFeature: (feature, layer) => {
-            layer.bindPopup(`Sector ID: ${feature.properties.id}`);
-          }
-        }).addTo(sectorLayer);
-        generatedGeoJSON = data;
-        return;
-      }
-    } catch(e) { /* fail silently -> fallback to SVG extraction */ }
-
-    // fallback: extract from an SVG file
-    await extractSectorsFromSVG('test.svg');
-  }
-
-  // --------------------------------
-  // SVG-to-Polygons extraction logic
-  // --------------------------------
-  // This uses SVGPathElement.getTotalLength() / getPointAtLength()
-  // — accurate rendering of curves/arcs/beziers.
-  async function extractSectorsFromSVG(svgUrl) {
-    let text;
-    try {
-      const res = await fetch(svgUrl);
-      if (!res.ok) throw new Error('SVG fetch failed');
-      text = await res.text();
-    } catch (err) {
-      console.error('Could not fetch SVG. CORS/local file issues are common when using file://. Serve the files from a local webserver or inline the SVG.', err);
-      return;
-    }
-
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(text, 'image/svg+xml');
-    const svg = doc.querySelector('svg');
-    if (!svg) { console.error('No <svg> root found'); return; }
-
-    // determine coordinate system (viewBox preferred)
-    let minX = 0, minY = 0, width = 1000, height = 1000;
-    const vb = svg.getAttribute('viewBox');
-    if (vb) {
-      const parts = vb.trim().split(/[\s,]+/).map(Number);
-      if (parts.length === 4) {
-        [minX, minY, width, height] = parts;
-      }
-    } else {
-      const w = parseFloat(svg.getAttribute('width'));
-      const h = parseFloat(svg.getAttribute('height'));
-      if (!isNaN(w) && !isNaN(h)) { width = w; height = h; }
-    }
-
-    // Offscreen SVG to host temporary paths so getTotalLength works
-    const off = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    off.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    off.setAttribute('viewBox', vb || `0 0 ${width} ${height}`);
-    off.style.position = 'absolute';
-    off.style.left = '-9999px';
-    off.style.width = '0';
-    off.style.height = '0';
-    off.style.overflow = 'hidden';
-    document.body.appendChild(off);
-
-    const originalPaths = svg.querySelectorAll('path');
-    let idCounter = 0;
-    const maxPointsPerPath = 300; // tune: higher = more accurate but heavier
-
-    originalPaths.forEach(pathEl => {
-      const d = pathEl.getAttribute('d');
-      if (!d) return;
-
-      // split into subpaths that start with M or m
-      const subpaths = d.match(/[Mm][^Mm]*/g) || [d];
-
-      subpaths.forEach(sub => {
-        // create a temporary path element for this subpath
-        const tmp = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        tmp.setAttribute('d', sub);
-        off.appendChild(tmp);
-
-        try {
-          const total = tmp.getTotalLength();
-          if (total === 0) { off.removeChild(tmp); return; }
-
-          // sample points along the path:
-          const approxPoints = Math.min(Math.max(Math.ceil(total / 2), 8), maxPointsPerPath);
-          const step = total / approxPoints;
-          const pts = [];
-          for (let s = 0; s <= total; s += step) {
-            const p = tmp.getPointAtLength(s);
-            pts.push([p.x, p.y]);
-          }
-          // include final point
-          const pf = tmp.getPointAtLength(total);
-          pts.push([pf.x, pf.y]);
-
-          // convert and scale into [-1,1] coordinate system (Leaflet Simple CRS)
-          const latlngs = pts.map(([x,y]) => {
-            const scaledX = ((x - minX) / width) * 2 - 1;   // -1..1
-            const scaledY = 1 - ((y - minY) / height) * 2;  // flip Y
-            return [scaledY, scaledX]; // Leaflet uses [lat, lng]
-          });
-
-          // remove duplicate consecutive points
-          const clean = latlngs.filter((p,i,a) => i === 0 || p[0] !== a[i-1][0] || p[1] !== a[i-1][1]);
-
-          if (clean.length > 2) {
-            const poly = L.polygon(clean, {
-              color: '#000',
-              weight: 1,
-              fillColor: '#888888',
-              fillOpacity: 0.6
-            }).bindPopup(`Sector ${idCounter}`);
-            // attach a feature-like object for compatibility with update code
-            poly.feature = { type: 'Feature', properties: { id: idCounter, color: '#888888' }, geometry: null };
-            sectorLayer.addLayer(poly);
-
-            // store feature in generatedGeoJSON
-            const geoCoords = clean.map(([lat,lng]) => [lng, lat]); // GeoJSON order
-            generatedGeoJSON.features.push({
-              type: 'Feature',
-              properties: { id: idCounter, color: '#888888' },
-              geometry: { type: 'Polygon', coordinates: [geoCoords] }
-            });
-
-            idCounter++;
-          }
-        } catch(err) {
-          console.warn('Error sampling path:', err);
-        } finally {
-          off.removeChild(tmp);
-        }
-      });
+    const MyCRS = L.extend({}, L.CRS.Simple, {
+      transformation: new L.Transformation(1, 1, -1, 1)
     });
 
-    // done with offscreen svg
-    document.body.removeChild(off);
-    console.log('Extracted', generatedGeoJSON.features.length, 'sectors from SVG.');
-  }
+    const map = L.map('map', {
+      crs: MyCRS,
+      center: [0, 0],
+      zoom: 9,
+      minZoom: 8.5,
+      maxZoom: 13
+    });
 
-  // ----------------------------
-  // Update colors from Google Sheet (expects columns id,color)
-  // ----------------------------
-  async function updateSectorColors() {
-    // Replace with your published sheet JSON URL (e.g. opensheet.elk.sh)
-    const sheetUrl = 'https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/SectorColors';
-    try {
-      const res = await fetch(sheetUrl);
-      if (!res.ok) return;
-      const rows = await res.json(); // array of rows { id: "0", color: "#ff00ff" }
-      // update leaflet polygons
-      sectorLayer.eachLayer(layer => {
-        if (!layer.feature || !layer.feature.properties) return;
-        const id = layer.feature.properties.id;
-        const row = rows.find(r => Number(r.id) === Number(id) || r.id == id);
-        if (row && row.color) {
-          layer.setStyle({ fillColor: row.color, fillOpacity: 0.7 });
-          layer.feature.properties.color = row.color;
-          // also update generatedGeoJSON (if you want to export)
-          const feat = generatedGeoJSON.features.find(f => f.properties.id == id);
-          if (feat) feat.properties.color = row.color;
-        }
+    const bounds = [[-1, -1], [1, 1]];
+
+    // --- Overlays ---
+    const overlaySheetURL = "https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/Map_Overlays";
+    fetch(overlaySheetURL)
+      .then(res => res.json())
+      .then(data => {
+        data.forEach(row => {
+          if (row.image_url) {
+            L.imageOverlay(row.image_url, bounds).addTo(map);
+          }
+        });
+        map.fitBounds(bounds);
       });
-    } catch(err) {
-      console.warn('Failed to update sector colors from sheet', err);
+
+    // --- LayerGroups ---
+    const homeLayer = L.layerGroup();
+    const deploymentLayer = L.layerGroup();
+
+    function loadMarkers(sheetURL, layer) {
+      fetch(sheetURL)
+        .then(res => res.json())
+        .then(data => {
+          const coordMap = {};
+          data.forEach(row => {
+            const x = parseFloat(row.x);
+            const y = parseFloat(row.y);
+            if (isNaN(x) || isNaN(y)) return;
+
+            const key = `${x},${y}`;
+            const marker = L.marker([y, x], {
+              icon: L.icon({
+                iconUrl: row.icon_url || "https://unpkg.com/leaflet/dist/images/marker-icon.png",
+                iconSize: [42, 42],
+                iconAnchor: [16, 32],
+                popupAnchor: [0, -28]
+              })
+            }).bindPopup(`<b>${row.name || "Unnamed"}</b><br>${row.description || ""}`);
+
+            if (!coordMap[key]) coordMap[key] = [];
+            coordMap[key].push(marker);
+          });
+
+          Object.values(coordMap).forEach(markersArray => {
+            if (markersArray.length === 1) {
+              markersArray[0].addTo(layer);
+            } else {
+              markersArray[0].addTo(layer);
+              markersArray[0].on('click', function() {
+                const tempCluster = L.markerClusterGroup({ spiderfyOnMaxZoom: true });
+                markersArray.forEach(m => tempCluster.addLayer(m));
+                map.addLayer(tempCluster);
+                tempCluster.spiderfy();
+                map.once('click', () => map.removeLayer(tempCluster));
+              });
+            }
+          });
+        });
     }
-  }
 
-  // call loadSectors(), then periodically update colors
-  loadSectors().then(() => {
-    // attempt initial color update (if user set sheet URL)
-    updateSectorColors();
-    setInterval(updateSectorColors, 60000); // every 60s
-  });
+    // Load HomeWorld markers (ON by default)
+    loadMarkers("https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/HomeWorldMap", homeLayer);
+    homeLayer.addTo(map);
 
-  // ----------------------------
-  // Download the generated GeoJSON (button)
-  // ----------------------------
-  document.getElementById('download-geojson').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify(generatedGeoJSON, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'sectors_extracted.geojson';
-    a.click();
-    URL.revokeObjectURL(url);
-  });
+    // Load Deployment markers (OFF by default)
+    loadMarkers("https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/DeploymentMap", deploymentLayer);
+    // notice: NOT added to map here!
 
-  // Add layer control
-  L.control.layers(null, {
-    "Sectors": sectorLayer,
-    "Home Planets": homeLayer,
-    "Deployment Planets": deploymentLayer
-  }).addTo(map);
-
+    // Add layer control
+    L.control.layers(null, {
+      "Home Planets": homeLayer,
+      "Deployment Planets": deploymentLayer
+    }).addTo(map);
   </script>
 </body>
 </html>
+
+
+
