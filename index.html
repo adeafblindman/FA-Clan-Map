@@ -134,7 +134,7 @@
     // 🔄 Optional: Update sector colors dynamically
     async function updateSectorColors() {
       // Example Google Sheet data: [{id: "3", color: "#ff0000"}, ...]
-      const sheetData = await fetch('YOUR_GOOGLESHEET_JSON_URL').then(r => r.json());
+      const sheetData = await fetch('https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/SectorColors').then(r => r.json());
       sectorLayer.eachLayer(layer => {
         if (layer.feature) {
           const match = sheetData.find(r => r.id == layer.feature.properties.id);
@@ -149,3 +149,4 @@
   </script>
 </body>
 </html>
+
