@@ -126,9 +126,9 @@
 
     // Add layer control
     L.control.layers(null, {
-      "Sectors": sectorLayer,
       "Home Planets": homeLayer,
-      "Deployment Planets": deploymentLayer
+     // "Deployment Planets": deploymentLayer,
+      "Sectors": sectorLayer
     }).addTo(map);
 
     //  Optional: Update sector colors dynamically
@@ -176,5 +176,6 @@ fetch('sectors.geojson')
   </script>
 </body>
 </html>
+
 
 
