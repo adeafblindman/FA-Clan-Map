@@ -52,6 +52,17 @@
         map.fitBounds(bounds);
       });
 
+
+//Coordinate Finder
+    var marker = L.marker([82.118384, -209.882813], {
+      draggable: true,
+    }).addTo(map);
+    marker.bindPopup('LatLng Marker').openPopup();
+    marker.on('dragend', function(e) {
+      marker.getPopup().setContent(marker.getLatLng().toString()).openOn(map);
+    });
+
+    
     // --- Layers ---
     const homeLayer = L.layerGroup();
     const deploymentLayer = L.layerGroup();
@@ -176,6 +187,7 @@ fetch('sectors.geojson')
   </script>
 </body>
 </html>
+
 
 
 
