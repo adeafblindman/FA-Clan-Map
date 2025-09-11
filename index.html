@@ -131,21 +131,49 @@
       "Deployment Planets": deploymentLayer
     }).addTo(map);
 
-    // 🔄 Optional: Update sector colors dynamically
-    async function updateSectorColors() {
-      // Example Google Sheet data: [{id: "3", color: "#ff0000"}, ...]
-      const sheetData = await fetch('https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/SectorColors').then(r => r.json());
-      sectorLayer.eachLayer(layer => {
-        if (layer.feature) {
-          const match = sheetData.find(r => r.id == layer.feature.properties.id);
-          if (match) {
-            layer.setStyle({ fillColor: match.color });
-          }
-        }
-      });
+    //  Optional: Update sector colors dynamically
+async function updateSectorColors() {
+  const sheetData = await fetch(
+    'https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/SectorColors'
+  ).then(r => r.json());
+
+  console.log('Sheet rows:', sheetData); // ✅ See what's being returned
+
+  if (!geoLayer) return; // geoLayer is set when sectors.geojson loads
+
+  geoLayer.eachLayer(layer => {
+    const id = layer.feature.properties.id; // number from GeoJSON
+    const match = sheetData.find(r => Number(r.id) === Number(id));
+    if (match && match.color) {
+      layer.setStyle({ fillColor: match.color });
+      layer.bindPopup(
+        `<b>Sector ${id}</b><br>${match["SECTOR NAME"] || ""}<br>${match.color}`
+      );
     }
+  });
+}
+fetch('sectors.geojson')
+  .then(res => res.json())
+  .then(data => {
+    geoLayer = L.geoJSON(data, {
+      style: f => ({
+        fillColor: f.properties.color || '#888888',
+        color: '#000',
+        weight: 1,
+        fillOpacity: 0.5
+      }),
+      onEachFeature: (f, layer) => {
+        layer.bindPopup(`Sector ID: ${f.properties.id}`);
+      }
+    }).addTo(sectorLayer);
+
+    // 🔄 Initial update
+    updateSectorColors();
+  });
+
     // Refresh colors every 60 seconds
     setInterval(updateSectorColors, 60000);
   </script>
 </body>
 </html>
+
