@@ -10,13 +10,14 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet-control-search/dist/leaflet-search.min.css" />
-  <script src="https://unpkg.com/leaflet-control-search/dist/leaflet-search.min.js"></script>
-
 
   <style>
     #map {
       width: 100%;
       height: 100vh;
+    }
+    .leaflet-control-search {
+      max-width: 250px;
     }
   </style>
 </head>
@@ -26,8 +27,10 @@
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+  <script src="https://unpkg.com/leaflet-control-search/dist/leaflet-search.min.js"></script>
 
   <script>
+    // Custom CRS for your map
     const MyCRS = L.extend({}, L.CRS.Simple, {
       transformation: new L.Transformation(1, 1, -1, 1)
     });
@@ -53,211 +56,156 @@
           }
         });
         map.fitBounds(bounds);
-        attribution: 'graphics by Chechin'
       });
 
-
-//Coordinate Finder
-    var marker = L.marker([-1, -1], {
-      draggable: true,
-    }).addTo(map);
+    // --- Coordinate Finder Marker ---
+    const marker = L.marker([-1, -1], { draggable: true }).addTo(map);
     marker.bindPopup('LatLng Marker').openPopup();
-    marker.on('dragend', function(e) {
+    marker.on('dragend', () => {
       marker.getPopup().setContent(marker.getLatLng().toString()).openOn(map);
     });
 
-    
     // --- Layers ---
     const homeLayer = L.layerGroup();
     const deploymentLayer = L.layerGroup();
+    const sectorLayer = L.layerGroup();
+    const allMarkers = []; // For search
 
-    const allMarkers = []; // ✅ store all markers for search
+    // Load markers from Google Sheets
+    function loadMarkers(sheetURL, layer) {
+      fetch(sheetURL)
+        .then(res => res.json())
+        .then(data => {
+          const coordMap = {};
+          data.forEach(row => {
+            const x = parseFloat(row.x);
+            const y = parseFloat(row.y);
+            if (isNaN(x) || isNaN(y)) return;
 
-function loadMarkers(sheetURL, layer) {
-  fetch(sheetURL)
-    .then(res => res.json())
-    .then(data => {
-      const coordMap = {};
-      data.forEach(row => {
-        const x = parseFloat(row.x);
-        const y = parseFloat(row.y);
-        if (isNaN(x) || isNaN(y)) return;
+            const key = `${x},${y}`;
+            const marker = L.marker([y, x], {
+              icon: L.icon({
+                iconUrl: row.icon_url || "https://unpkg.com/leaflet/dist/images/marker-icon.png",
+                iconSize: [42, 42],
+                iconAnchor: [16, 32],
+                popupAnchor: [0, -28]
+              }),
+              title: row.name || "Unnamed" // For search
+            }).bindPopup(`<b>${row.name || "Unnamed"}</b><br>${row.description || ""}`);
 
-        const key = `${x},${y}`;
-        const marker = L.marker([y, x], {
-          icon: L.icon({
-            iconUrl: row.icon_url || "https://unpkg.com/leaflet/dist/images/marker-icon.png",
-            iconSize: [42, 42],
-            iconAnchor: [16, 32],
-            popupAnchor: [0, -28]
-          })
-        }).bindPopup(`<b>${row.name || "Unnamed"}</b><br>${row.description || ""}`);
+            allMarkers.push(marker);
 
-        allMarkers.push(marker); // ✅ Add marker to array
-
-        if (!coordMap[key]) coordMap[key] = [];
-        coordMap[key].push(marker);
-      });
-
-      Object.values(coordMap).forEach(markersArray => {
-        if (markersArray.length === 1) {
-          markersArray[0].addTo(layer);
-        } else {
-          markersArray[0].addTo(layer);
-          markersArray[0].on('click', function() {
-            const tempCluster = L.markerClusterGroup({ spiderfyOnMaxZoom: true });
-            markersArray.forEach(m => tempCluster.addLayer(m));
-            map.addLayer(tempCluster);
-            tempCluster.spiderfy();
-            map.once('click', () => map.removeLayer(tempCluster));
+            if (!coordMap[key]) coordMap[key] = [];
+            coordMap[key].push(marker);
           });
-        }
-      });
-    });
-}
 
-// Wait a bit to ensure markers are loaded before attaching search
-setTimeout(() => {
-  const searchControl = new L.Control.Search({
-    layer: L.layerGroup(allMarkers), // ✅ search all stored markers
-    propertyName: 'name',            // Use marker's popup or name field
-    zoom: 12,
-    marker: false,                   // Don’t draw a new marker
-    moveToLocation: (latlng, title, map) => {
-      map.setView(latlng, 12);
+          Object.values(coordMap).forEach(markersArray => {
+            if (markersArray.length === 1) {
+              markersArray[0].addTo(layer);
+            } else {
+              markersArray[0].addTo(layer);
+              markersArray[0].on('click', function() {
+                const tempCluster = L.markerClusterGroup({ spiderfyOnMaxZoom: true });
+                markersArray.forEach(m => tempCluster.addLayer(m));
+                map.addLayer(tempCluster);
+                tempCluster.spiderfy();
+                map.once('click', () => map.removeLayer(tempCluster));
+              });
+            }
+          });
+        });
     }
-  });
 
-  searchControl.on('search:locationfound', e => {
-    e.layer.openPopup(); // Open popup when found
-  });
-
-  map.addControl(searchControl);
-}, 1500);
-
-
-    
-    // Load HomeWorld markers (ON by default)
+    // Load layers
     loadMarkers("https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/HomeWorldMap", homeLayer);
     homeLayer.addTo(map);
 
-    // Load Deployment markers (OFF by default)
     loadMarkers("https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/DeploymentMap", deploymentLayer);
 
     // --- GeoJSON Sectors ---
-    const sectorLayer = L.layerGroup();
+    let geoLayer; // Make global for dynamic updates
     fetch('sectors.geojson')
       .then(res => res.json())
       .then(data => {
-        const geoLayer = L.geoJSON(data, {
-          style: feature => ({
-            fillColor: feature.properties.color || '#888888',
+        geoLayer = L.geoJSON(data, {
+          style: f => ({
+            fillColor: f.properties.color || '#888888',
             color: '#000',
             weight: 1,
             fillOpacity: 0.5
           }),
-          onEachFeature: (feature, layer) => {
-            layer.bindPopup(`Sector ID: ${feature.properties.id}`);
+          onEachFeature: (f, layer) => {
+            layer.bindPopup(`Sector ID: ${f.properties.id}`);
           }
         }).addTo(sectorLayer);
+
+        updateSectorColors();
       });
 
     sectorLayer.addTo(map);
 
-    // Add layer control
+    // Update sector colors dynamically
+    async function updateSectorColors() {
+      const sheetData = await fetch(
+        'https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/SectorColors'
+      ).then(r => r.json());
+
+      if (!geoLayer) return;
+
+      geoLayer.eachLayer(layer => {
+        const id = layer.feature.properties.id;
+        const match = sheetData.find(r => Number(r.id) === Number(id));
+
+        if (match) {
+          const color = match.color || '#888888';
+          const opacity = match.opacity ? parseFloat(match.opacity) : 0.5;
+
+          layer.setStyle({
+            fillColor: color,
+            fillOpacity: opacity,
+            color: '#000',
+            weight: 1
+          });
+
+          layer.bindPopup(
+            `<b>Sector ${id}</b><br>${match["SECTOR NAME"] || ""}<br>`
+          );
+        }
+      });
+    }
+
+    setInterval(updateSectorColors, 60000);
+
+    // Layer control
     L.control.layers(null, {
       "Home Planets": homeLayer,
-     // "Deployment Planets": deploymentLayer,
+      //"Deployment Planets": deploymentLayer,
       "Sectors": sectorLayer
     }).addTo(map);
 
-    //  Optional: Update sector colors dynamically
-async function updateSectorColors() {
-  const sheetData = await fetch(
-    'https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/SectorColors'
-  ).then(r => r.json());
-
-  console.log('Sheet rows:', sheetData); // ✅ See what's being returned
-
-  if (!geoLayer) return; // geoLayer is set when sectors.geojson loads
-
-  geoLayer.eachLayer(layer => {
-    const id = layer.feature.properties.id; // number from GeoJSON
-    const match = sheetData.find(r => Number(r.id) === Number(id));
-
-    if (match) {
-      const color = match.color || '#888888';
-      const opacity = match.opacity ? parseFloat(match.opacity) : 0.5; // default if missing
-
-      layer.setStyle({
-        fillColor: color,
-        fillOpacity: opacity,
-        color: '#000',
-        weight: 1
+    // Add search control after markers load
+    setTimeout(() => {
+      const searchControl = new L.Control.Search({
+        layer: L.layerGroup(allMarkers),
+        propertyName: 'title',
+        zoom: 12,
+        marker: false,
+        moveToLocation: (latlng, title, map) => {
+          map.setView(latlng, 12);
+        }
       });
 
-      layer.bindPopup(
-        `<b>Sector ${id}</b><br>
-         ${match["SECTOR NAME"] || ""}<br>`
-        
-      );
-    }
-  });
-}
+      searchControl.on('search:locationfound', e => {
+        e.layer.openPopup();
+      });
 
+      map.addControl(searchControl);
+    }, 2000);
 
-
-
-    
-fetch('sectors.geojson')
-  .then(res => res.json())
-  .then(data => {
-    geoLayer = L.geoJSON(data, {
-      style: f => ({
-        fillColor: f.properties.color || '#888888',
-        color: '#000',
-        weight: 1,
-        fillOpacity: 0.5
-      }),
-      onEachFeature: (f, layer) => {
-        layer.bindPopup(`Sector ID: ${f.properties.id}`);
-      }
-    }).addTo(sectorLayer);
-
-    // 🔄 Initial update
-    updateSectorColors();
-  });
-
-    // Refresh colors every 60 seconds
-    setInterval(updateSectorColors, 60000);
-
-
-//attributions
-map.attributionControl.addAttribution('Built by <a href="https://github.com/adeafblindman"> ADeafBlindMan </a> | Data by <a href="https://stats.freedomalliance.gg/"> The Freedom Alliance </a>');
-
-    
+    // Attributions
+    map.attributionControl.addAttribution(
+      'Built by <a href="https://github.com/adeafblindman">ADeafBlindMan</a> | Data by <a href="https://stats.freedomalliance.gg/">The Freedom Alliance</a>'
+    );
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
