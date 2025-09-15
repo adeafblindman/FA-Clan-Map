@@ -5,7 +5,8 @@
       "type": "Feature",
       "properties": {
         "id": 51,
-        "color": "#ffffff00"
+        "color": "#ffffff00",
+        "opacity": 0.25
       },
       "geometry": {
         "type": "Polygon",
@@ -31,7 +32,8 @@
       "type": "Feature",
       "properties": {
         "id": 34,
-        "color": "#ffffff00"
+        "color": "#ffffff00",
+        "opacity": 0.25
       },
       "geometry": {
         "type": "Polygon",
@@ -58,7 +60,8 @@
       "type": "Feature",
       "properties": {
         "id": 49,
-        "color": "#ffffff00"
+        "color": "#ffffff00",
+        "opacity": 0.25
       },
       "geometry": {
         "type": "Polygon",
@@ -98,7 +101,8 @@
       "type": "Feature",
       "properties": {
         "id": 50,
-        "color": "#ffffff00"
+        "color": "#ffffff00",
+        "opacity": 0.25
       },
       "geometry": {
         "type": "Polygon",
