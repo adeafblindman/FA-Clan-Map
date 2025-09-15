@@ -9,10 +9,8 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
-<!-- ✅ Leaflet Control Search (cdnjs mirror) -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-search/3.0.9/leaflet-search.min.css"/>
-
-
+  <!-- ✅ Leaflet Control Search CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-search/3.0.9/leaflet-search.min.css"/>
 
   <style>
     #map {
@@ -30,12 +28,12 @@
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-  <script src="https://unpkg.com/leaflet-control-search/dist/leaflet-search.min.js"></script>
+  <!-- ✅ Correct Leaflet Control Search JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-search/3.0.9/leaflet-search.min.js"></script>
 
   <script>
+    console.log('Search plugin:', L.Control.Search); // Should log a function
 
-    console.log(L.Control.Search); // should NOT be undefined now
-    
     // Custom CRS for your map
     const MyCRS = L.extend({}, L.CRS.Simple, {
       transformation: new L.Transformation(1, 1, -1, 1)
@@ -89,20 +87,20 @@
             if (isNaN(x) || isNaN(y)) return;
 
             const key = `${x},${y}`;
-            const marker = L.marker([y, x], {
+            const m = L.marker([y, x], {
               icon: L.icon({
                 iconUrl: row.icon_url || "https://unpkg.com/leaflet/dist/images/marker-icon.png",
                 iconSize: [42, 42],
                 iconAnchor: [16, 32],
                 popupAnchor: [0, -28]
               }),
-              title: row.name || "Unnamed" // For search
+              title: row.name || "Unnamed"
             }).bindPopup(`<b>${row.name || "Unnamed"}</b><br>${row.description || ""}`);
 
-            allMarkers.push(marker);
+            allMarkers.push(m);
 
             if (!coordMap[key]) coordMap[key] = [];
-            coordMap[key].push(marker);
+            coordMap[key].push(m);
           });
 
           Object.values(coordMap).forEach(markersArray => {
@@ -110,7 +108,7 @@
               markersArray[0].addTo(layer);
             } else {
               markersArray[0].addTo(layer);
-              markersArray[0].on('click', function() {
+              markersArray[0].on('click', () => {
                 const tempCluster = L.markerClusterGroup({ spiderfyOnMaxZoom: true });
                 markersArray.forEach(m => tempCluster.addLayer(m));
                 map.addLayer(tempCluster);
@@ -129,7 +127,7 @@
     loadMarkers("https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/DeploymentMap", deploymentLayer);
 
     // --- GeoJSON Sectors ---
-    let geoLayer; // Make global for dynamic updates
+    let geoLayer;
     fetch('sectors.geojson')
       .then(res => res.json())
       .then(data => {
@@ -161,21 +159,16 @@
       geoLayer.eachLayer(layer => {
         const id = layer.feature.properties.id;
         const match = sheetData.find(r => Number(r.id) === Number(id));
-
         if (match) {
           const color = match.color || '#888888';
           const opacity = match.opacity ? parseFloat(match.opacity) : 0.5;
-
           layer.setStyle({
             fillColor: color,
             fillOpacity: opacity,
             color: '#000',
             weight: 1
           });
-
-          layer.bindPopup(
-            `<b>Sector ${id}</b><br>${match["SECTOR NAME"] || ""}<br>`
-          );
+          layer.bindPopup(`<b>Sector ${id}</b><br>${match["SECTOR NAME"] || ""}<br>`);
         }
       });
     }
@@ -215,5 +208,3 @@
   </script>
 </body>
 </html>
-
-
