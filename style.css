@@ -2,3 +2,7 @@
   background: none !important;
   border: none !important;
 }
+
+.leaflet-control-search {
+  max-width: 250px;
+}
