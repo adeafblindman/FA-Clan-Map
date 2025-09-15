@@ -170,7 +170,6 @@ async function updateSectorColors() {
       layer.bindPopup(
         `<b>Sector ${id}</b><br>
          ${match["SECTOR NAME"] || ""}<br>
-         Opacity: ${opacity}`
       );
     }
   });
@@ -204,6 +203,7 @@ fetch('sectors.geojson')
   </script>
 </body>
 </html>
+
 
 
 
