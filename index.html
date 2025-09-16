@@ -3,25 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <title>FA Clan Map</title>
-    <link rel="icon" type="image/x-icon" href="https://stats.freedomalliance.gg/static/FAlogo.webp">
+  <link rel="icon" type="image/x-icon" href="https://stats.freedomalliance.gg/static/FAlogo.webp">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
-  <!-- ✅ Leaflet Control Search CSS -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-search/3.0.9/leaflet-search.min.css"/>
 
   <style>
-    #map {
-      width: 100%;
-      height: 100vh;
-    }
-
-
-
-    
+    #map { width: 100%; height: 100vh; }
   </style>
 </head>
 <body>
@@ -30,16 +22,11 @@
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-  <!-- ✅ Correct Leaflet Control Search JS -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-search/3.0.9/leaflet-search.min.js"></script>
 
   <script>
-    console.log('Search plugin:', L.Control.Search); // Should log a function
-
-    // Custom CRS for your map
-    const MyCRS = L.extend({}, L.CRS.Simple, {
-      transformation: new L.Transformation(1, 1, -1, 1)
-    });
+    // --- Custom CRS ---
+    const MyCRS = L.extend({}, L.CRS.Simple, { transformation: new L.Transformation(1, 1, -1, 1) });
 
     const map = L.map('map', {
       crs: MyCRS,
@@ -51,9 +38,8 @@
 
     const bounds = [[-1, -1], [1, 1]];
 
-    // --- Background Overlays ---
-    const overlaySheetURL = "https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/Map_Overlays";
-    fetch(overlaySheetURL)
+    // --- Background overlays from sheet ---
+    fetch("https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/Map_Overlays")
       .then(res => res.json())
       .then(data => {
         data.forEach(row => {
@@ -64,31 +50,28 @@
         map.fitBounds(bounds);
       });
 
-    // --- Coordinate Finder Marker ---
+    // --- Coordinate finder marker ---
     const marker = L.marker([-1, -1], { draggable: true }).addTo(map);
     marker.bindPopup('LatLng Marker').openPopup();
     marker.on('dragend', () => {
       marker.getPopup().setContent(marker.getLatLng().toString()).openOn(map);
     });
 
-    // --- Layers ---
-    const homeLayer = L.layerGroup();
-    const deploymentLayer = L.layerGroup();
+    // --- Layers and clustering ---
+    const homeLayer = L.markerClusterGroup({ spiderfyOnMaxZoom: true });
+    const deploymentLayer = L.markerClusterGroup({ spiderfyOnMaxZoom: true });
     const sectorLayer = L.layerGroup();
-    const allMarkers = []; // For search
+    const allMarkers = [];
 
-    // Load markers from Google Sheets
-    function loadMarkers(sheetURL, layer) {
+    function loadMarkers(sheetURL, clusterLayer) {
       fetch(sheetURL)
         .then(res => res.json())
         .then(data => {
-          const coordMap = {};
           data.forEach(row => {
             const x = parseFloat(row.x);
             const y = parseFloat(row.y);
             if (isNaN(x) || isNaN(y)) return;
 
-            const key = `${x},${y}`;
             const m = L.marker([y, x], {
               icon: L.icon({
                 iconUrl: row.icon_url || "https://unpkg.com/leaflet/dist/images/marker-icon.png",
@@ -100,35 +83,18 @@
             }).bindPopup(`<b>${row.name || "Unnamed"}</b><br>${row.description || ""}`);
 
             allMarkers.push(m);
-
-            if (!coordMap[key]) coordMap[key] = [];
-            coordMap[key].push(m);
-          });
-
-          Object.values(coordMap).forEach(markersArray => {
-            if (markersArray.length === 1) {
-              markersArray[0].addTo(layer);
-            } else {
-              markersArray[0].addTo(layer);
-              markersArray[0].on('click', () => {
-                const tempCluster = L.markerClusterGroup({ spiderfyOnMaxZoom: true });
-                markersArray.forEach(m => tempCluster.addLayer(m));
-                map.addLayer(tempCluster);
-                tempCluster.spiderfy();
-                map.once('click', () => map.removeLayer(tempCluster));
-              });
-            }
+            clusterLayer.addLayer(m);
           });
         });
     }
 
-    // Load layers
     loadMarkers("https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/HomeWorldMap", homeLayer);
-    homeLayer.addTo(map);
-
     loadMarkers("https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/DeploymentMap", deploymentLayer);
 
-    // --- GeoJSON Sectors ---
+    // Add Home by default
+    homeLayer.addTo(map);
+
+    // --- GeoJSON sectors ---
     let geoLayer;
     fetch('sectors.geojson')
       .then(res => res.json())
@@ -144,20 +110,17 @@
             layer.bindPopup(`Sector ID: ${f.properties.id}`);
           }
         }).addTo(sectorLayer);
-
         updateSectorColors();
       });
 
     sectorLayer.addTo(map);
 
-    // Update sector colors dynamically
     async function updateSectorColors() {
       const sheetData = await fetch(
         'https://opensheet.elk.sh/1c49pLUImZ3ap5JEn5Ao3QpUrfFp3Y3NExcotr6w02ko/SectorColors'
       ).then(r => r.json());
 
       if (!geoLayer) return;
-
       geoLayer.eachLayer(layer => {
         const id = layer.feature.properties.id;
         const match = sheetData.find(r => Number(r.id) === Number(id));
@@ -170,47 +133,37 @@
             color: '#000',
             weight: 1
           });
-          layer.bindPopup(`<b>Sector ${id}</b><br>${match["SECTOR NAME"] || ""}<br>`);
+          layer.bindPopup(`<b>Sector ${id}</b><br>${match["SECTOR NAME"] || ""}`);
         }
       });
     }
-
     setInterval(updateSectorColors, 60000);
 
-    // Layer control
+    // --- Layer control ---
     L.control.layers(null, {
       "Home Planets": homeLayer,
-      //"Deployment Planets": deploymentLayer,
+      "Deployment Planets": deploymentLayer,
       "Sectors": sectorLayer
     }).addTo(map);
 
-    // Add search control after markers load
+    // --- Search control ---
     setTimeout(() => {
       const searchControl = new L.Control.Search({
         layer: L.layerGroup(allMarkers),
         propertyName: 'title',
         zoom: 12,
         marker: false,
-        moveToLocation: (latlng, title, map) => {
-          map.setView(latlng, 12);
-        }
+        moveToLocation: (latlng, title, map) => map.setView(latlng, 12)
       });
 
-      searchControl.on('search:locationfound', e => {
-        e.layer.openPopup();
-      });
-
+      searchControl.on('search:locationfound', e => e.layer.openPopup());
       map.addControl(searchControl);
     }, 2000);
 
-    // Attributions
+    // --- Attribution ---
     map.attributionControl.addAttribution(
       'Built by <a href="https://github.com/adeafblindman">ADeafBlindMan</a> | Data by <a href="https://stats.freedomalliance.gg/">The Freedom Alliance</a>'
     );
   </script>
 </body>
 </html>
-
-
-
-
