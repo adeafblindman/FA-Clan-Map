@@ -3,46 +3,4 @@
   border: none !important;
 }
 
-/* --- Custom Leaflet Search Bar Styling --- */
-.leaflet-control-search {
-  background: #2b2b2b;         /* Dark gray background */
-  border-radius: 8px;          /* Rounded corners */
-  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-  padding: 4px;
-  max-width: 260px;            /* Prevents overly long input */
-}
 
-.leaflet-control-search input.search-input {
-  width: 100%;
-  padding: 6px 8px;
-  border: none;
-  border-radius: 4px;
-  font-size: 14px;
-  background: #3a3a3a;
-  color: #fff;                 /* White text for contrast */
-}
-
-.leaflet-control-search input.search-input::placeholder {
-  color: #bbb;                 /* Lighter placeholder text */
-}
-
-.leaflet-control-search .search-button {
-  background: #4cafef;         /* Accent color for the button */
-  border: none;
-  border-radius: 4px;
-  padding: 4px 6px;
-  cursor: pointer;
-}
-
-.leaflet-control-search .search-button:hover {
-  background: #2f9adf;         /* Darker on hover */
-}
-
-/* Optional: Adjust dropdown result styling */
-.leaflet-control-search .search-tooltip {
-  background: #2b2b2b;
-  color: #fff;
-  border-radius: 6px;
-  border: 1px solid #555;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-}
